@@ -1,0 +1,37 @@
+#!/bin/sh
+#
+# An example hook script to check the commit log message taken by
+# applypatch from an e-mail message.
+#
+# The hook should exit with non-zero status after issuing an
+# appropriate message if it wants to stop the commit.  The hook is
+# allowed to edit the commit message file.
+#
+# To enable this hook, rename this file to "applypatch-msg".
+
+. git-sh-setup
+
+# Insert 
+#sed -n '/^Cc/,/^Subject:/p' /tmp/foo.patch| head -n-1 | \
+#        sed -e 's/Cc: //' | tr -s ' ' | sed 's/, /\n/g' | \
+#        sed 's/,$//' | sed 's/^[ ]*/Cc: /' >> $1
+
+# Insert Cc-list generated via ~/scripts/extract-cc
+if [ -e /tmp/cc-list ]; then
+	while IFS='' read -r line  || [[ -n $line ]]; do
+		echo $line | sed -ue 's/Cc: //' | \
+		xargs -L 1 -I replace-str grep -q -L replace-str "$1" || {
+			echo $line >> "$1"
+		}
+	done < /tmp/cc-list
+fi
+
+SOB=$(git var GIT_COMMITTER_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
+grep -qs "^$SOB" "$1" ||  {
+        # Do not insert SOB if commit is a fixup
+        grep -qs "^fixup" "$1" || echo "$SOB" >> "$1"
+}
+
+test -x "$GIT_DIR/hooks/commit-msg" &&
+	exec "$GIT_DIR/hooks/commit-msg" ${1+"$@"}
+:

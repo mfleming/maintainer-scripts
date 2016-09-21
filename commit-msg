@@ -1,0 +1,74 @@
+#!/bin/sh
+#
+# An example hook script to check the commit log message.
+# Called by "git commit" with one argument, the name of the file
+# that has the commit message.  The hook should exit with non-zero
+# status after issuing an appropriate message if it wants to stop the
+# commit.  The hook is allowed to edit the commit message file.
+#
+# To enable this hook, rename this file to "commit-msg".
+
+# Uncomment the below to add a Signed-off-by line to the message.
+# Doing this in a hook is a bad idea in general, but the prepare-commit-msg
+# hook is more suited to it.
+#
+#SOB=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
+#grep -qs "^$SOB" "$1" ||  {
+	# Do not insert SOB if commit is a fixup
+	#grep -qs "^fixup" "$1" || echo "$SOB" >> "$1"
+#}
+
+error() {
+	echo >&2 "Error: $1"
+	exit 1
+}
+
+# This example catches duplicate Signed-off-by lines.
+test "" = "$(grep '^Signed-off-by: ' "$1" |
+	 sort | uniq -c | sed -e '/^[ 	]*1[ 	]/d')" || {
+	echo >&2 Duplicate Signed-off-by lines.
+	exit 1
+}
+
+# Catch lines ending with full-stops.
+head -n1 "$1" | grep -q '\.$' && {
+	echo >&2 Commit line ends with full-stop.
+}
+
+# Be super slack with merge commits
+head -n1 "$1" | grep -q '^Merge' && {
+	exit 0
+}
+
+# Be super slack with revert commits
+head -n1 "$1" | grep -q '^Revert' && {
+	exit 0
+}
+
+# Check for subsystem tag
+test "" = "$(head -n1 $1 | grep '[A-Za-z0-9*]\+\:')" && {
+	echo >&2 No subsystem tag
+	exit 1
+}
+
+# No capital latters for subsystem tags
+test "" = "$(head -n1 "$1" | grep '.*[A-Z]\+.*\:')" || {
+	echo >&2 Subsystem tag contains capital letters
+}
+
+# ... but force capital letters for subject
+head -n1 "$1" | sed 's/^.*: //' | grep "^[A-Z0-9].*" || {
+	echo >&2 "Subject must begin with capital letter"
+}
+
+#if  `head -n1 "$1" | sed 's/[^\:]//g' | awk '{print length;}'` -gt 1 ; then
+#	echo >&2 Too many subsystem tags?
+#	exit 1
+#fi
+
+# Check for malformed email tags
+grep '<.*@' "$1" | grep -qv ".*>" && {
+	error "Malformed email tag"
+}
+
+exit 0
