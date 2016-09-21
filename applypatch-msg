@@ -32,6 +32,14 @@ grep -qs "^$SOB" "$1" ||  {
         grep -qs "^fixup" "$1" || echo "$SOB" >> "$1"
 }
 
+# Insert EFI maintainer addresses if not present already
+ARD="Ard Biesheuvel <ard.biesheuvel@linaro.org>"
+MATT="Matt Fleming <matt@codeblueprint.co.uk>"
+
+for m in "$ARD" "$MATT"; do
+	grep -qs "^[a-zA-Z\-]\+: $m" "$1" || echo "Cc: $m" >> "$1"
+done
+
 test -x "$GIT_DIR/hooks/commit-msg" &&
 	exec "$GIT_DIR/hooks/commit-msg" ${1+"$@"}
 :
