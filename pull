@@ -1,0 +1,51 @@
+#!/bin/bash
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 <upstream base commit> <ref>"
+    exit 1
+fi
+
+pull=/tmp/efi.pull
+old_color_setting=$(git config --global color.ui)
+git config --global color.ui never
+
+mkdir -p ${pull}
+
+b=$(git merge-base torvalds/master $1)
+: ${BASE:= $b}
+export BASE
+
+git format-patch -o ${pull} --cover-letter \
+  --to 'Ingo Molnar <mingo@kernel.org>' \
+  --to 'Thomas Gleixner <tglx@linutronix.de>' \
+  --to 'H. Peter Anvin <hpa@zytor.com>' \
+  --cc 'Ard Biesheuvel <ard.biesheuvel@linaro.org>' \
+  --cc 'linux-kernel@vger.kernel.org' \
+  --cc 'linux-efi@vger.kernel.org' \
+  ${BASE}..$1
+git request-pull ${BASE} git://git.kernel.org/pub/scm/linux/kernel/git/efi/efi.git $1 > ${pull}/tag
+
+sed -i '/BLURB HERE/,$d' "${pull}/0000-cover-letter.patch"
+sed -i '$d' "${pull}/0000-cover-letter.patch"
+sed -i '$s/$/,/' "${pull}/0000-cover-letter.patch"
+
+sed -i '4s/PATCH/GIT PULL/' "${pull}/0000-cover-letter.patch"
+
+git log ${BASE}..$1 | \
+	grep -E "(-by\:|Cc\:)" | sed -e "s/.*\-by\: //" -e "s/.*Cc\: //" | sed "s/^/    /" | sed 's/$/,/' | sort | uniq >> "${pull}/0000-cover-letter.patch" 
+
+# Strip the comma from the last Cc
+sed -i '$s/,$/\n/' "${pull}/0000-cover-letter.patch"
+
+# Use the pull request file for the cover letter
+cat "${pull}/tag" >> "${pull}/0000-cover-letter.patch" 
+
+# Get rid of tag file so that we don't try to send it with git
+# send-email
+rm ${pull}/tag
+
+echo "Wrote pull request to $pull"
+
+git config --global color.ui $old_color_setting
+
+vim "+4" "+/\*\*\*" /tmp/efi.pull/0000-cover-letter.patch
